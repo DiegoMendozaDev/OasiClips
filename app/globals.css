@@ -3,6 +3,19 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --turquoise: #00c2c7;
+  --navy: #003c57;
+  --coral: #ff6f61;
+  --mint: #a8e6cf;
+  --white: #ffffff;
+  --bg: #f5f7f8;
+  --text: #3c3c3c;
+  --text-strong: #0f1720;
+  --shadow: 0 6px 20px rgba(3, 60, 87, 0.12);
+}
+html {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial;
 }
 
 @theme inline {
@@ -11,7 +24,21 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
+/* prefer reduced motion: reduce/disable animations */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
 
+/* Small utility: focus visible */
+:focus-visible {
+  outline: 3px solid rgba(0, 194, 199, 0.16);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -23,4 +50,33 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+/* ocultar visualmente pero accesible */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* mostrar cuando recibe foco */
+.sr-only.focus\:not-sr-only:focus,
+.sr-only.focus\:not-sr-only:active,
+.sr-only:focus,
+.sr-only:active {
+  position: fixed;
+  left: 1rem;
+  top: 1rem;
+  width: auto;
+  height: auto;
+  padding: 0.45rem 0.66rem;
+  background: var(--white);
+  color: var(--navy);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
+  z-index: 9999;
 }
