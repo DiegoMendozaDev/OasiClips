@@ -1,8 +1,9 @@
 // app/api/typeform-webhook/route.ts
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import prisma from "@/lib/prisma";
 
-export const runtime = "nodejs"; // <-- CORREGIDO: 'nodejs' es el valor válido
+export const runtime = "nodejs";
 
 const TYPEFORM_SECRET = process.env.TYPEFORM_WEBHOOK_SECRET || "";
 const GA4_MEASUREMENT_ID = process.env.GA4_MEASUREMENT_ID || "";
@@ -24,7 +25,6 @@ async function sendToGA4(eventName: string, params: Record<string, any>) {
     return false;
   }
 
-  // client_id: use crypto.randomUUID if available, otherwise fallback to timestamp+random
   let client_id: string;
   try {
     client_id = (crypto as any).randomUUID
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
   }
 
-  // read raw body as text for signature verification
+  // read raw body (text) for signature verification
   const raw = await req.text();
 
   // optional signature check
@@ -102,6 +102,7 @@ export async function POST(req: Request) {
     }
   }
 
+  // parse payload
   let payload: any;
   try {
     payload = JSON.parse(raw);
@@ -113,46 +114,99 @@ export async function POST(req: Request) {
   const eventType = payload.event_type || payload.event || "unknown";
   const formResponse = payload.form_response ?? payload;
   const formId = formResponse?.form_id ?? payload?.form_id ?? null;
+
+  // Typeform fields useful for idempotency
+  const responseToken = formResponse?.token ?? null; // form_response.token
+  const eventId = payload?.event_id ?? null; // sometimes present
+
   const answers = formResponse?.answers ?? [];
   const hidden = formResponse?.hidden ?? {};
-  const submittedAt = formResponse?.submitted_at ?? new Date().toISOString();
+  const submittedAtRaw = formResponse?.submitted_at ?? null;
+  const submittedAt = submittedAtRaw ? new Date(submittedAtRaw) : null;
+  const answersCount = Array.isArray(answers) ? answers.length : 0;
 
-  const conversion = {
-    source: "typeform",
-    eventType,
-    formId,
-    submittedAt,
-    hidden,
-    answersSummary: Array.isArray(answers)
-      ? answers.map((a: any) => ({
-          fieldId: a.field?.id ?? a.field_id ?? null,
-          type: a.type ?? null,
-          text:
-            a.text ?? a.choice?.label ?? a.email ?? a.url ?? a.number ?? null,
-        }))
-      : [],
-  };
-
+  // safe minimal log (no PII)
   console.info("[typeform-webhook] conversion received:", {
     formId,
-    submittedAt,
+    submittedAt: submittedAt?.toISOString() ?? null,
     eventType,
+    answers_count: answersCount,
     hiddenKeys: Object.keys(hidden || {}),
   });
 
+  // === PERSISTENCE WITH IDEMPOTENCY ===
   try {
-    await sendToGA4("cta_conversion", {
-      form_id: formId,
-      event_type: eventType,
-      submitted_at: submittedAt,
-      answers_count: Array.isArray(answers) ? answers.length : 0,
-      ...hidden,
-    });
-  } catch (e) {
-    console.error("Error sending to GA4:", e);
+    // try to find by responseToken or eventId
+    let existing: any = null;
+    if (responseToken) {
+      existing = await prisma.conversion.findUnique({
+        where: { responseToken },
+      });
+    }
+    if (!existing && eventId) {
+      existing = await prisma.conversion.findUnique({
+        where: { eventId },
+      });
+    }
+
+    if (existing) {
+      console.info(
+        "[typeform-webhook] duplicate conversion, skipping persist",
+        {
+          id: existing.id,
+          responseToken,
+          eventId,
+        }
+      );
+    } else {
+      // build create data without passing nulls to JSON fields
+      const createData: any = {
+        formId: formId ?? null,
+        eventId: eventId ?? null,
+        responseToken: responseToken ?? null,
+        submittedAt: submittedAt ?? null,
+        answersCount,
+      };
+
+      if (Object.keys(hidden || {}).length) {
+        createData.hidden = hidden;
+      }
+      if (Array.isArray(answers) && answers.length) {
+        createData.answers = answers;
+      }
+
+      const created = await prisma.conversion.create({
+        data: createData,
+      });
+      console.info("[typeform-webhook] persisted conversion id:", created.id);
+    }
+  } catch (dbErr) {
+    console.error(
+      "[typeform-webhook] DB error while persisting conversion:",
+      dbErr
+    );
+    // we intentionally don't fail the webhook here; consider retrying or alerting in prod
   }
 
-  // TODO: persist to DB if needed
+  // forward to GA4 (best-effort). Do not include PII.
+  try {
+    const ga4Ok = await sendToGA4("cta_conversion", {
+      form_id: formId,
+      event_type: eventType,
+      submitted_at: submittedAt ? submittedAt.toISOString() : null,
+      answers_count: answersCount,
+      ...hidden,
+    });
+    if (ga4Ok) {
+      console.info("[typeform-webhook] forwarded event to GA4");
+    } else {
+      console.info(
+        "[typeform-webhook] GA4 not configured or forwarding failed"
+      );
+    }
+  } catch (e) {
+    console.error("[typeform-webhook] error forwarding to GA4:", e);
+  }
 
   return NextResponse.json({ success: true });
 }
