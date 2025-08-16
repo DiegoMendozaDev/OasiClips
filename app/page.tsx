@@ -1,6 +1,7 @@
-import HeaderTransparentOnScroll from "@/app/components/headerTransparentOnScroll";
-import CookieConsent from "./components/cookieConsent";
-("@/app/components/cookieConsent");
+// app/page.tsx
+import Header from "@/app/components/header";
+import CookieConsent from "@/app/components/cookieConsent";
+import Hero from "@/app/components/hero"; // <- el componente que te propuse
 
 export const metadata = {
   title: "OasiClips",
@@ -21,76 +22,21 @@ export default function Landing() {
       >
         Ir al contenido
       </a>
-      <HeaderTransparentOnScroll />
-      <main id="main" className="max-w-6xl mx-auto px-6 py-12">
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-          <div>
-            <h2 className="text-4xl font-extrabold leading-tight">
-              De 1 episodio a 10 publicaciones — sin perder horas.
-            </h2>
-            <p className="mt-4 text-lg text-gray-600">
-              Sube el episodio y OasiClips genera clips optimizados, captions,
-              thumbnails y los programa en tus plataformas favoritas. 3 meses
-              Pro gratis para early-birds.
-            </p>
 
-            <div className="mt-6 flex flex-wrap gap-3">
-              <a
-                href={TYPEFORM_LINK}
-                target="_blank"
-                rel="noreferrer"
-                className="bg-indigo-600 text-white px-5 py-3 rounded-md font-medium shadow"
-              >
-                Accede a la beta (3 meses gratis)
-              </a>
-              <a
-                href="#how"
-                className="text-sm px-4 py-3 rounded-md border border-gray-200"
-              >
-                Ver cómo funciona
-              </a>
-            </div>
+      <Header />
+      <main
+        id="main"
+        className="max-w-6xl mx-auto px-6"
+        style={{
+          // fallback 72px si la variable aún no está disponible
+          paddingTop: "calc(var(--header-height, 72px) + 3rem)",
+          paddingBottom: "3rem",
+        }}
+      >
+        {/* ---- HERO (reemplazado por componente) ---- */}
+        <Hero />
 
-            <ul className="mt-6 space-y-3 text-gray-700">
-              <li>
-                ✅ Ahorra tiempo: edita y publica en múltiples plataformas en
-                minutos.
-              </li>
-              <li>
-                ✅ Maximiza alcance: captions y thumbnails optimizados por IA.
-              </li>
-              <li>
-                ✅ Monetiza mejor: conecta con micro-patrocinios (próximamente).
-              </li>
-            </ul>
-
-            <div className="mt-6 text-sm text-gray-500">
-              ¿Prefieres probar sin compromiso? Regístrate y recibirás créditos
-              gratis para tus primeros 5 exports.
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="text-sm text-gray-500">Demo rápido</div>
-            <div className="mt-4 rounded-md overflow-hidden bg-black h-56 flex items-center justify-center text-white">
-              Vídeo / Mockup
-            </div>
-            <div className="mt-4 text-sm text-gray-600">
-              Sube un episodio, revisa 3 clips sugeridos, edita y programa.
-            </div>
-            <div className="mt-4">
-              <a
-                href={TYPEFORM_LINK}
-                target="_blank"
-                rel="noreferrer"
-                className="block text-center bg-indigo-600 text-white px-4 py-2 rounded-md"
-              >
-                Quiero la beta
-              </a>
-            </div>
-          </div>
-        </section>
-
+        {/* ---- Features ---- */}
         <section id="features" className="mt-16">
           <h3 className="text-2xl font-bold">Lo que hace por tí</h3>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -124,6 +70,7 @@ export default function Landing() {
           </div>
         </section>
 
+        {/* ---- Cómo funciona ---- */}
         <section
           id="como-funciona"
           className="mt-16 bg-white p-8 rounded-xl shadow"
@@ -145,6 +92,7 @@ export default function Landing() {
           </ol>
         </section>
 
+        {/* ---- Pricing ---- */}
         <section id="pricing" className="mt-16">
           <h3 className="text-2xl font-bold">Pricing (preview)</h3>
           <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -188,6 +136,7 @@ export default function Landing() {
           </div>
         </section>
 
+        {/* ---- FAQ ---- */}
         <section id="faq" className="mt-16 bg-white p-8 rounded-xl shadow">
           <h3 className="text-2xl font-bold">FAQ</h3>
           <details className="mt-4">
@@ -236,10 +185,14 @@ export default function Landing() {
           </div>
         </div>
       </footer>
+
       <CookieConsent />
     </div>
   );
 }
+
+/* ----------------------- Helpers ----------------------- */
+
 interface FeatureCardProps {
   title: string;
   desc: string;
@@ -252,6 +205,7 @@ function FeatureCard({ title, desc }: FeatureCardProps) {
     </div>
   );
 }
+
 interface PriceCardProps {
   title: string;
   price: string;
@@ -259,7 +213,6 @@ interface PriceCardProps {
   highlight: boolean;
   note?: string;
 }
-
 function PriceCard({ title, price, bullets, highlight, note }: PriceCardProps) {
   return (
     <div

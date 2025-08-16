@@ -23,6 +23,7 @@ const TOP_SCROLL_THRESHOLD = 64;
 const NEAR_BOTTOM_THRESHOLD = 100;
 const SCROLLSPY_SUPPRESS_MS = 700;
 const UNDERLINE_ENTRY_MS = 360;
+const MOBILE_CLOSE_DELAY_MS = 720; // corto para evitar race entre scroll y desmontaje
 
 function slugify(label: string) {
   return label
@@ -33,7 +34,7 @@ function slugify(label: string) {
     .toLowerCase();
 }
 
-export default function HeaderInlineLogo() {
+export default function Header() {
   const reduce = useReducedMotion();
   const navControls = useAnimation();
 
@@ -45,26 +46,22 @@ export default function HeaderInlineLogo() {
   const navLabels = ["Features", "Cómo funciona", "Pricing", "FAQ"];
   const navItems = navLabels.map((l) => ({ label: l, id: slugify(l) }));
 
+  const headerRef = useRef<HTMLElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileMenuRef = useRef<HTMLElement | null>(null);
+  const prevFocusedRef = useRef<HTMLElement | null>(null);
   const suppressScrollSpyRef = useRef(false);
   const suppressTimeoutRef = useRef<number | null>(null);
+  const firstMenuEffectRef = useRef(true);
 
   /* Framer variants */
   const navContainer: Variants = {
     hidden: {},
-    show: {
-      transition: { staggerChildren: 0.09, delayChildren: 0.08 },
-    },
+    show: { transition: { staggerChildren: 0.09, delayChildren: 0.08 } },
   };
-
   const navItem: Variants = {
     hidden: { opacity: 0, y: -8 },
-    show: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.36 }, // simple for TS
-    },
+    show: { opacity: 1, y: 0, transition: { duration: 0.36 } },
   };
 
   const logoIdle = reduce ? {} : { y: [0, -3, 0], rotate: [0, 0.5, 0] };
@@ -84,7 +81,7 @@ export default function HeaderInlineLogo() {
     return () => window.removeEventListener("scroll", onScrollHeader);
   }, []);
 
-  /* scrollspy logic (same robust approach you had) */
+  /* robust scrollspy (mejor sincronización) */
   useEffect(() => {
     let raf = 0;
     let ticking = false;
@@ -159,30 +156,39 @@ export default function HeaderInlineLogo() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navItems.map((n) => n.id).join(",")]);
 
+  // robust scrollToSection: double RAF then smooth scroll; set active immediately; suppress scrollspy briefly
   const scrollToSection = useCallback((id: string) => {
     const el = document.getElementById(id);
     if (!el) return;
 
-    setMobileOpen(false);
-
+    // compute target top accounting header
     const headerEl = document.querySelector(
       "header[role='banner']"
     ) as HTMLElement | null;
     const headerHeight = headerEl ? headerEl.offsetHeight : 72;
-    const offset = headerHeight + 8;
 
-    const targetY = Math.max(
-      0,
-      window.scrollY + el.getBoundingClientRect().top - offset
-    );
+    const rect = el.getBoundingClientRect();
+    const absoluteTop = window.scrollY + rect.top;
+    const targetY = Math.max(0, Math.floor(absoluteTop - headerHeight - 8));
 
-    suppressScrollSpyRef.current = true;
-    if (suppressTimeoutRef.current) {
-      window.clearTimeout(suppressTimeoutRef.current);
-    }
+    // set active visually
     setActiveId(id);
 
-    window.scrollTo({ top: targetY, behavior: "smooth" });
+    // suppress scrollspy so it doesn't fight programmatic navigation
+    suppressScrollSpyRef.current = true;
+    if (suppressTimeoutRef.current)
+      window.clearTimeout(suppressTimeoutRef.current);
+
+    // start smooth scroll with double RAF to avoid layout / unmount race
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          window.scrollTo({ top: targetY, behavior: "smooth" });
+        } catch {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    });
 
     suppressTimeoutRef.current = window.setTimeout(() => {
       suppressScrollSpyRef.current = false;
@@ -204,17 +210,14 @@ export default function HeaderInlineLogo() {
     ? { duration: 0 }
     : { duration: UNDERLINE_ENTRY_MS / 1000 };
 
-  /* --------- Analytics handlers ---------- */
+  /* Analytics */
   const onCtaClick = useCallback((e: React.MouseEvent) => {
     try {
       void trackEvent({
         name: "cta_click",
         params: { cta: "beta_signup", location: "header", href: TYPEFORM_LINK },
       });
-    } catch {
-      /* swallow */
-    }
-    // no preventDefault: allow link to open
+    } catch {}
   }, []);
 
   const onNavClick = useCallback((label: string, id: string) => {
@@ -224,16 +227,73 @@ export default function HeaderInlineLogo() {
         params: { label, id, location: "header" },
       });
     } catch {}
-    // scroll handled elsewhere
   }, []);
-  const firstMenuEffectRef = useRef(true);
+
+  /* Mobile menu: ESC to close & focus trap */
   useEffect(() => {
-    // evitamos disparar evento en el primer mount
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && mobileOpen) {
+        setMobileOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mobileOpen]);
+
+  useEffect(() => {
+    if (!mobileOpen) {
+      // restore previous focus
+      if (prevFocusedRef.current) {
+        try {
+          prevFocusedRef.current.focus();
+        } catch {}
+        prevFocusedRef.current = null;
+      }
+      return;
+    }
+
+    // save previously focused element
+    prevFocusedRef.current = document.activeElement as HTMLElement | null;
+
+    const container = mobileMenuRef.current;
+    if (!container) {
+      menuButtonRef.current?.focus();
+      return;
+    }
+
+    const focusableSelector =
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+    const focusable = Array.from(
+      container.querySelectorAll<HTMLElement>(focusableSelector)
+    ).filter((el) => el.offsetParent !== null);
+
+    const first = focusable[0] ?? container;
+    const last = focusable[focusable.length - 1] ?? container;
+    (first as HTMLElement).focus();
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Tab") return;
+      if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        (first as HTMLElement).focus();
+      }
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        (last as HTMLElement).focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mobileOpen]);
+
+  /* analytics: avoid firing on first render */
+  useEffect(() => {
     if (firstMenuEffectRef.current) {
       firstMenuEffectRef.current = false;
       return;
     }
-    // track mobile menu open/close
     if (mobileOpen) {
       void trackEvent({
         name: "mobile_menu_open",
@@ -245,10 +305,33 @@ export default function HeaderInlineLogo() {
         params: { location: "header" },
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mobileOpen]);
+  // mantener --header-height sincronizada con la altura real del header
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
 
-  /* detect if SVG import is React component (SVGR) or asset path */
+    const setHeaderHeight = () => {
+      const h = el.offsetHeight || 72;
+      document.documentElement.style.setProperty("--header-height", `${h}px`);
+    };
+
+    // initial set
+    setHeaderHeight();
+
+    // observe header resize (useful si cambia con contenido/animaciones)
+    const ro = new ResizeObserver(setHeaderHeight);
+    ro.observe(el);
+
+    // guard for window resizes too
+    window.addEventListener("resize", setHeaderHeight);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", setHeaderHeight);
+    };
+  }, []);
+
   const isReactComponentLogo =
     typeof (logoOasi as any) === "function" ||
     (typeof (logoOasi as any) === "object" && !!(logoOasi as any).$$typeof);
@@ -264,6 +347,7 @@ export default function HeaderInlineLogo() {
       </a>
 
       <motion.header
+        ref={headerRef}
         role="banner"
         initial={false}
         animate={{
@@ -323,7 +407,6 @@ export default function HeaderInlineLogo() {
                 </div>
               </div>
 
-              {/* Mint badge (sutil) */}
               <motion.span
                 aria-hidden="true"
                 className="absolute -top-1 -right-1 md:-top-2 md:-right-2 hidden md:inline-flex items-center px-2 py-0.5 text-[10px] md:text-xs font-semibold rounded-full shadow"
@@ -361,7 +444,7 @@ export default function HeaderInlineLogo() {
             </div>
           </div>
 
-          {/* Nav (desktop) */}
+          {/* Desktop nav */}
           <motion.nav
             className="hidden md:flex items-center gap-6 text-sm font-medium"
             variants={navContainer}
@@ -442,7 +525,7 @@ export default function HeaderInlineLogo() {
               onClick={() => setMobileOpen((s) => !s)}
               ref={menuButtonRef}
               className="md:hidden p-2 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mint)] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              aria-label="Abrir menú"
+              aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
               aria-expanded={mobileOpen}
               aria-controls="mobile-menu"
               style={{ color: "var(--navy)" }}
@@ -465,6 +548,8 @@ export default function HeaderInlineLogo() {
               className="md:hidden border-t"
               style={{ background: "var(--white)", borderColor: "#E6E9EB" }}
               tabIndex={-1}
+              role="dialog"
+              aria-modal="true"
             >
               <div className="px-6 py-4 space-y-4 text-sm font-medium">
                 {navItems.map(({ label, id }) => {
@@ -476,14 +561,19 @@ export default function HeaderInlineLogo() {
                       onClick={(e) => {
                         e.preventDefault();
                         onNavClick(label, id);
+                        // start robust scroll
                         scrollToSection(id);
+                        // close mobile menu shortly after starting scroll to avoid unmount race
+                        setTimeout(
+                          () => setMobileOpen(false),
+                          MOBILE_CLOSE_DELAY_MS
+                        );
                       }}
                       className={`block transition-colors ${
                         isActive
                           ? "text-[var(--turquoise)] font-bold"
                           : "text-[var(--text)]"
                       }`}
-                      onClickCapture={() => setMobileOpen(false)}
                       aria-current={isActive ? "page" : undefined}
                     >
                       {label}
