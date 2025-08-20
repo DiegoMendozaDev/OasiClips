@@ -1,4 +1,4 @@
-// HeaderInlineLogo.integratedAnalytics.tsx
+// app/components/HeaderInlineLogo.integratedAnalytics.tsx
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -13,6 +13,7 @@ import {
 import { Menu, X } from "lucide-react";
 import logoOasi from "@/public/logo-oasiclips.svg";
 import { trackEvent } from "@/lib/analytics";
+import ThemeToggle from "@/app/components/themeToggle"; // <-- ajusta ruta si lo guardas en otro sitio
 
 /* === config === */
 const TYPEFORM_LINK =
@@ -81,77 +82,170 @@ export default function Header() {
     return () => window.removeEventListener("scroll", onScrollHeader);
   }, []);
 
-  /* robust scrollspy (mejor sincronización) */
   useEffect(() => {
-    let raf = 0;
-    let ticking = false;
+    // fallback if no IntersectionObserver
+    if (!("IntersectionObserver" in globalThis)) {
+      let raf = 0;
+      let ticking = false;
+      function getSections() {
+        return navItems
+          .map((n) => ({ id: n.id, el: document.getElementById(n.id) }))
+          .filter((x): x is { id: string; el: HTMLElement } => Boolean(x.el));
+      }
+      function computeActiveFallback() {
+        if (suppressScrollSpyRef.current) return;
+        if ((globalThis as any).scrollY < TOP_SCROLL_THRESHOLD)
+          return setActiveId(null);
 
-    function getSections() {
-      return navItems
-        .map((n) => ({ id: n.id, el: document.getElementById(n.id) }))
-        .filter((x): x is { id: string; el: HTMLElement } => Boolean(x.el));
+        const secs = getSections();
+        if (!secs.length) return setActiveId(null);
+
+        const scrollBottom =
+          (globalThis as any).innerHeight + (globalThis as any).scrollY;
+        const docHeight = document.documentElement.scrollHeight;
+        if (scrollBottom >= docHeight - NEAR_BOTTOM_THRESHOLD) {
+          setActiveId(secs[secs.length - 1].id);
+          return;
+        }
+
+        const vh =
+          (globalThis as any).innerHeight ||
+          document.documentElement.clientHeight;
+        const refY = vh * 0.35;
+        let best: { id: string; distance: number } | null = null;
+        for (const { id, el } of secs) {
+          const r = el.getBoundingClientRect();
+          const elemMid = r.top + r.height / 2;
+          const dist = Math.abs(elemMid - refY);
+          if (!best || dist < best.distance) best = { id, distance: dist };
+        }
+        if (best) setActiveId(best.id);
+      }
+
+      function tick() {
+        if (ticking) return;
+        ticking = true;
+        raf = (globalThis as any).requestAnimationFrame(() => {
+          computeActiveFallback();
+          ticking = false;
+        });
+      }
+
+      const initial = (globalThis as any).setTimeout(computeActiveFallback, 80);
+      (globalThis as any).addEventListener("scroll", tick, { passive: true });
+      (globalThis as any).addEventListener("resize", tick);
+
+      const mo = new MutationObserver(() => tick());
+      mo.observe(document.body, { childList: true, subtree: true });
+
+      return () => {
+        (globalThis as any).clearTimeout(initial);
+        (globalThis as any).cancelAnimationFrame(raf);
+        (globalThis as any).removeEventListener("scroll", tick);
+        (globalThis as any).removeEventListener("resize", tick);
+        mo.disconnect();
+      };
     }
 
-    function computeActive() {
+    // Preferred: IntersectionObserver branch
+    const sections = navItems
+      .map((n) => ({ id: n.id, el: document.getElementById(n.id) }))
+      .filter((x): x is { id: string; el: HTMLElement } => Boolean(x.el));
+
+    if (sections.length === 0) {
+      setActiveId(null);
+      return;
+    }
+
+    let mounted = true;
+    let observer: IntersectionObserver | null = null;
+
+    const headerEl = document.querySelector(
+      "header[role='banner']"
+    ) as HTMLElement | null;
+    const headerHeight = headerEl?.offsetHeight ?? 72;
+
+    const rootMargin = `-${headerHeight + 8}px 0px -40% 0px`;
+    const thresholds = [0, 0.15, 0.35, 0.6, 0.9];
+
+    const ratios = new Map<string, number>();
+
+    observer = new IntersectionObserver(
+      (entries) => {
+        if (!mounted) return;
+        if (suppressScrollSpyRef.current) return;
+
+        entries.forEach((ent) => {
+          const id = (ent.target as HTMLElement).id;
+          ratios.set(id, ent.intersectionRatio);
+        });
+
+        const scrollBottom =
+          (globalThis as any).innerHeight + (globalThis as any).scrollY;
+        const docHeight = document.documentElement.scrollHeight;
+        if (scrollBottom >= docHeight - NEAR_BOTTOM_THRESHOLD) {
+          const last = sections[sections.length - 1].id;
+          setActiveId((prev) => (prev === last ? prev : last));
+          return;
+        }
+
+        let bestId: string | null = null;
+        let bestRatio = 0;
+        for (const { id } of sections) {
+          const r = ratios.get(id) ?? 0;
+          if (r > bestRatio) {
+            bestRatio = r;
+            bestId = id;
+          }
+        }
+
+        if ((globalThis as any).scrollY < TOP_SCROLL_THRESHOLD) {
+          setActiveId(null);
+          return;
+        }
+
+        if (bestId && bestRatio > 0.02) {
+          setActiveId((prev) => (prev === bestId ? prev : bestId));
+        }
+      },
+      { root: null, rootMargin, threshold: thresholds }
+    );
+
+    sections.forEach((s) => observer?.observe(s.el));
+
+    const bootTimeout = (globalThis as any).setTimeout(() => {
       if (suppressScrollSpyRef.current) return;
-
-      if (window.scrollY < TOP_SCROLL_THRESHOLD) {
-        setActiveId(null);
-        return;
-      }
-
-      const secs = getSections();
-      if (secs.length === 0) {
-        setActiveId(null);
-        return;
-      }
-
-      const scrollBottom = window.innerHeight + window.scrollY;
-      const docHeight = document.documentElement.scrollHeight;
-      if (scrollBottom >= docHeight - NEAR_BOTTOM_THRESHOLD) {
-        const lastId = secs[secs.length - 1].id;
-        setActiveId((prev) => (prev === lastId ? prev : lastId));
-        return;
-      }
-
-      const vh = window.innerHeight || document.documentElement.clientHeight;
+      const vh =
+        (globalThis as any).innerHeight ||
+        document.documentElement.clientHeight;
       const refY = vh * 0.35;
-
       let best: { id: string; distance: number } | null = null;
-      for (const { id, el } of secs) {
+      for (const { id, el } of sections) {
         const r = el.getBoundingClientRect();
         const elemMid = r.top + r.height / 2;
         const dist = Math.abs(elemMid - refY);
         if (!best || dist < best.distance) best = { id, distance: dist };
       }
-      if (best) setActiveId((prev) => (prev === best!.id ? prev : best!.id));
-    }
+      if (best) setActiveId(best.id);
+    }, 100);
 
-    function tick() {
-      if (ticking) return;
-      ticking = true;
-      raf = requestAnimationFrame(() => {
-        computeActive();
-        ticking = false;
-      });
-    }
-
-    const initialTimeout = window.setTimeout(() => {
-      computeActive();
-    }, 80);
-
-    window.addEventListener("scroll", tick, { passive: true });
-    window.addEventListener("resize", tick);
-
-    const mo = new MutationObserver(() => tick());
+    const mo = new MutationObserver(() => {
+      // noop for now — could re-create observer on significant header-size changes
+    });
     mo.observe(document.body, { childList: true, subtree: true });
 
+    function onResizeForObserver() {
+      // nudge a scroll event to let IO recalc
+      (globalThis as any).dispatchEvent(new Event("scroll"));
+    }
+    (globalThis as any).addEventListener("resize", onResizeForObserver);
+
     return () => {
-      clearTimeout(initialTimeout);
-      cancelAnimationFrame(raf);
-      window.removeEventListener("scroll", tick);
-      window.removeEventListener("resize", tick);
+      mounted = false;
+      bootTimeout && (globalThis as any).clearTimeout(bootTimeout);
+      if (observer) observer.disconnect();
       mo.disconnect();
+      (globalThis as any).removeEventListener("resize", onResizeForObserver);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navItems.map((n) => n.id).join(",")]);
@@ -202,10 +296,13 @@ export default function Header() {
     [activeId, hoverId, reduce]
   );
 
-  const underlineAnimate = (visible: boolean) =>
-    reduce
-      ? { scaleX: visible ? 1 : 0, opacity: visible ? 1 : 0 }
-      : { scaleX: visible ? 1 : 0, opacity: visible ? 1 : 0 };
+  const underlineAnimate = useCallback(
+    (visible: boolean) =>
+      reduce
+        ? { scaleX: visible ? 1 : 0, opacity: visible ? 1 : 0 }
+        : { scaleX: visible ? 1 : 0, opacity: visible ? 1 : 0 },
+    [reduce]
+  );
   const underlineTransition = reduce
     ? { duration: 0 }
     : { duration: UNDERLINE_ENTRY_MS / 1000 };
@@ -306,6 +403,7 @@ export default function Header() {
       });
     }
   }, [mobileOpen]);
+
   // mantener --header-height sincronizada con la altura real del header
   useEffect(() => {
     const el = headerRef.current;
@@ -353,7 +451,7 @@ export default function Header() {
         animate={{
           paddingTop: scrolled ? "0.5rem" : "1rem",
           paddingBottom: scrolled ? "0.5rem" : "1rem",
-          background: scrolled ? "rgba(255,255,255,0.6)" : "var(--white)",
+          background: "var(--card-bg)", // antes usabas blanco/rgba fijo
           backdropFilter: scrolled ? "blur(6px)" : "none",
           boxShadow: scrolled ? "none" : "var(--shadow)",
         }}
@@ -493,7 +591,7 @@ export default function Header() {
             })}
           </motion.nav>
 
-          {/* CTA + mobile toggle */}
+          {/* CTA + ThemeToggle + mobile toggle */}
           <div className="flex items-center gap-3">
             <div className="hidden md:block flex-shrink-0">
               <motion.a
@@ -519,6 +617,10 @@ export default function Header() {
               >
                 🚀 Apúntate a la beta
               </motion.a>
+            </div>
+            {/* Theme toggle (desktop + mobile) */}
+            <div className="flex items-center">
+              <ThemeToggle />
             </div>
 
             <button

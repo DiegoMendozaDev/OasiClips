@@ -1,212 +1,190 @@
-/* global.css — versión final (lista para pegar) */
-
-/* === Tailwind entry (mantén esto si tu pipeline usa Tailwind) === */
 @import "tailwindcss";
 
-/* === Diseño — variables (paleta recomendada) === */
+/* === Design tokens / palette === */
 :root {
   --background: #ffffff;
-  --foreground: #171717;
-  --turquoise: #00c2c7;
-  --navy: #003c57;
-  --coral: #ff6f61;
-  --mint: #a8e6cf;
-  --white: #ffffff;
   --bg: #f5f7f8;
-  --text: #3c3c3c;
+  --white: #ffffff;
+  --card-bg: #ffffff;
+  --page-bg: #f5f7f8;
+
+  --muted: #6b7280;
+
   --text-strong: #0f1720;
+  --text: #374151;
+
+  --navy: #003c57;
+  --turquoise: #008387;
+  --coral: #c15449;
+  --mint: #a8e6cf;
+
   --shadow: 0 6px 20px rgba(3, 60, 87, 0.12);
 
-  /* RGB helpers (útiles para forzar colores con alpha si hace falta) */
-  --text-r: 60;
-  --text-g: 60;
-  --text-b: 60;
-  --text-strong-r: 15;
-  --text-strong-g: 23;
-  --text-strong-b: 32;
-
-  --underline-duration: 260ms;
-  --underline-ease: cubic-bezier(0.22, 1, 0.36, 1);
-
-  --header-height: 72px; /* fallback, será actualizado en runtime por el header */
+  --header-height: 72px;
+  color-scheme: light;
 }
 
-/* === Tipografía y smoothing === */
+/* Dark mode overrides using .dark on <html> */
+:root.dark,
+html.dark {
+  --background: #060606;
+  --bg: #0b0b0b;
+  --white: #0b0b0b;
+
+  --text: #dbecee;
+  --text-strong: #ffffff;
+
+  --muted: #9aa9ad;
+  --navy: #93d0cc; /* tonos para acentos en dark */
+  --turquoise: #00b3a7;
+  --coral: #ff8a76;
+  --mint: #16393a;
+  --card-bg: #0b0b0b;
+  --page-bg: #070707;
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+/* Base */
 html {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, "Noto Sans";
+    Roboto, "Helvetica Neue", Arial;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
-
-/* Helper gradient para hero/encabezados grandes */
-.header-hero-gradient {
-  background: linear-gradient(90deg, var(--turquoise), var(--navy));
+body {
+  background: var(--background);
+  color: var(--text);
 }
 
-/* === Accesibilidad / reduced motion === */
+/* gradient-text helper */
+.gradient-text {
+  background: linear-gradient(90deg, var(--turquoise), var(--navy));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Underline */
+.nav-underline {
+  transform-origin: left;
+  transform: scaleX(0);
+  display: block;
+  width: 100%;
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .nav-link:hover .nav-underline {
+    transform: scaleX(1);
+  }
+}
+
+/* Focus-visible accessible rules (applies both themes) */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(168, 230, 207, 0.18);
+  border-radius: 8px;
+}
+
+/* CTA strong focus ring (contrast aware) */
+.btn-primary:focus-visible,
+a.btn-primary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(0, 60, 87, 0.18);
+  border-radius: 8px;
+}
+
+/* Dark-friendly focus for circular dark buttons */
+button:where([aria-label^="Reproducir"], .dark-bg-button):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+/* Hide focus ring for mouse-driven focus */
+:focus:not(:focus-visible) {
+  box-shadow: none !important;
+}
+
+/* Header / anchors helper: reserve space for fixed header */
+#main {
+  padding-top: calc(var(--header-height) + 0.5rem);
+}
+
+/* anchor snap offset */
+#features,
+#como-funciona,
+#pricing,
+#faq {
+  scroll-margin-top: calc(var(--header-height) + 8px);
+}
+
+/* Ejemplo: tarjetas */
+.card {
+  background: var(--card-bg);
+  color: var(--text);
+}
+
+/* small utility classes */
+.card-lift {
+  transition: transform 220ms ease, box-shadow 220ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .card-lift:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 14px 32px rgba(3, 60, 87, 0.12);
+  }
+}
+.bg-card {
+  background: var(--card-bg);
+}
+/* Buttons */
+.btn-primary {
+  background-color: var(--coral);
+  color: var(--card-bg);
+  box-shadow: var(--shadow);
+  font-weight: 600;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.btn-muted {
+  background: transparent;
+  border: 1px solid rgba(3, 60, 87, 0.06);
+  color: var(--navy);
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+}
+
+/* Reduced motion respect */
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
   }
 }
 
-/* Focus visible (keyboard users) */
-:focus-visible {
-  outline: 3px solid rgba(0, 194, 199, 0.16);
-  outline-offset: 2px;
-  border-radius: 6px;
+/* small helpers */
+.text-muted {
+  color: var(--text);
 }
 
-/* Small named focus helper */
-.focus-ring {
-  box-shadow: 0 0 0 3px rgba(168, 230, 207, 0.22);
-  border-radius: 8px;
+/* ensure interactive text in dark has enough contrast (fine-tune) */
+html.dark a,
+html.dark button {
+  color: var(--text);
 }
 
-/* Dark mode sensible defaults */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --bg: #07121a;
-    --text: #d1d5db;
-    --text-strong: #ffffff;
-  }
-  html {
-    color-scheme: dark;
-  }
+.text-muted {
+  color: var(--muted);
 }
-
-/* === Base — fondo y color por defecto === */
-body {
-  background: var(--background);
-  color: rgb(var(--text-r), var(--text-g), var(--text-b)); /* cuerpo */
-  margin: 0;
-  font-family: inherit;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* Headings y texto fuerte para contraste */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-strong,
-b {
-  color: rgb(var(--text-strong-r), var(--text-strong-g), var(--text-strong-b));
-}
-
-/* === Skip link / sr-only helpers === */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.sr-only.focus\:not-sr-only:focus,
-.sr-only:focus,
-.sr-only:active {
-  position: fixed;
-  left: 1rem;
-  top: 1rem;
-  width: auto;
-  height: auto;
-  padding: 0.45rem 0.66rem;
-  background: var(--white);
-  color: var(--navy);
-  border-radius: 6px;
-  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
-  z-index: 9999;
-}
-
-/* === Underline micro-interaction (header links) === */
-/* .nav-underline used as inline element inside links. Default hidden (scaleX(0)). */
-.nav-underline {
-  transform-origin: left;
-  display: block;
-  width: 100%;
-  transform: scaleX(0);
-  opacity: 0;
-  transition: transform var(--underline-duration) var(--underline-ease),
-    opacity var(--underline-duration) var(--underline-ease);
-}
-
-/* Only enable hover interactions on devices that support hover */
-@media (hover: hover) and (pointer: fine) {
-  .group:hover > .nav-underline,
-  .nav-link:hover > .nav-underline {
-    transform: scaleX(1);
-    opacity: 1;
-  }
-}
-
-/* Reduced motion: disable underline transitions */
-@media (prefers-reduced-motion: reduce) {
-  .nav-underline {
-    transition: none;
-    transform: scaleX(1);
-    opacity: 1;
-  }
-}
-
-/* === Anchor target offset helpers === */
-#features,
-#como-funciona,
-#pricing,
-#faq {
-  scroll-margin-top: calc(var(--header-height, 72px) + 8px);
-}
-
-/* Simple utility classes (optional but handy) */
-.u-shadow-soft {
-  box-shadow: var(--shadow);
-}
-.u-rounded-md {
-  border-radius: 0.5rem;
-}
-
-/* === Emergency safety overrides (al final, mínimos y documentados) ===
-   Estos ayudan si alguna regla muy específica (p. ej. `text-white` en un padre)
-   está forzando color blanco por accidente. Manténlos sólo si los necesitas.
-*/
-body,
-#__next {
-  background: var(--background) !important;
-}
-
-/* Forzar color de texto legible si algo lo sobrescribe con blanco.
-   Dejamos esto como parche final; si lo necesitas, conservar — si no, puedes quitar !important. */
-body,
-body *:not(svg):not(path):not([role="img"]) {
-  color: rgb(var(--text-r), var(--text-g), var(--text-b)) !important;
-}
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-strong,
-b {
-  color: rgb(
-    var(--text-strong-r),
-    var(--text-strong-g),
-    var(--text-strong-b)
-  ) !important;
-}
-
-/* === Fin de global.css === */

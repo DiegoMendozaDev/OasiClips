@@ -1,4 +1,3 @@
-// components/HeroWithDemo.tsx
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -8,17 +7,17 @@ const TYPEFORM_LINK =
   process.env.NEXT_PUBLIC_TYPEFORM_URL ||
   "https://form.typeform.com/to/ei83l0Mg";
 
-/** Small SVG icons (inline for fidelity + no extra requests) */
-function IconPlay(props: { className?: string }) {
+/* ---------------- Icons ---------------- */
+function IconPlay({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <svg viewBox="0 0 24 24" aria-hidden className={className}>
       <path d="M4 2v20l18-10L4 2z" fill="currentColor" />
     </svg>
   );
 }
-function IconCheck(props: { className?: string }) {
+function IconCheck({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden {...props}>
+    <svg viewBox="0 0 24 24" aria-hidden className={className}>
       <path
         d="M20.285 6.708a1 1 0 0 0-1.414-1.416L9 15.17 5.129 11.3A1 1 0 0 0 3.715 12.715l4.243 4.243a1 1 0 0 0 1.414 0l9.913-9.913z"
         fill="currentColor"
@@ -27,7 +26,7 @@ function IconCheck(props: { className?: string }) {
   );
 }
 
-/** Simple accessible modal (no external libs) */
+/* ---------------- Modal with focus-trap ---------------- */
 function DemoModal({
   open,
   onClose,
@@ -36,34 +35,58 @@ function DemoModal({
 }: {
   open: boolean;
   onClose: () => void;
-  src?: string; // e.g. YouTube embed url or video url
+  src?: string;
   title?: string;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const prevActiveRef = useRef<HTMLElement | null>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    if (!open) return;
+
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+    document.body.style.overflow = "hidden";
+
+    const el = dialogRef.current;
+    if (!el) return;
+
+    // focus first focusable element or dialog container
+    const focusableSelector =
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+    const nodes = Array.from(
+      el.querySelectorAll<HTMLElement>(focusableSelector)
+    ).filter((n) => n.offsetWidth > 0 || n.offsetHeight > 0 || n.tabIndex >= 0);
+    const first = nodes[0] ?? el;
+    (first as HTMLElement).focus();
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    if (open) {
-      prevActiveRef.current = document.activeElement as HTMLElement | null;
-      document.body.style.overflow = "hidden";
-      window.addEventListener("keydown", onKey);
-      // focus the dialog container
-      setTimeout(() => dialogRef.current?.focus(), 50);
-    } else {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKey);
-      try {
-        prevActiveRef.current?.focus();
-      } catch {
-        /* ignore */
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === "Tab") {
+        // focus trap
+        const all = nodes.length ? nodes : [el];
+        const firstNode = all[0];
+        const lastNode = all[all.length - 1];
+        if (e.shiftKey && document.activeElement === firstNode) {
+          e.preventDefault();
+          (lastNode as HTMLElement).focus();
+        } else if (!e.shiftKey && document.activeElement === lastNode) {
+          e.preventDefault();
+          (firstNode as HTMLElement).focus();
+        }
       }
     }
+
+    window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = "";
       window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+      try {
+        previouslyFocused.current?.focus();
+      } catch {}
     };
   }, [open, onClose]);
 
@@ -73,22 +96,26 @@ function DemoModal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={title}
+      aria-labelledby="demo-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
     >
-      {/* backdrop */}
+      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/55 backdrop-blur-sm"
         onClick={onClose}
       />
+
       <div
         ref={dialogRef}
         tabIndex={-1}
         className="relative z-10 max-w-3xl w-full rounded-xl overflow-hidden bg-black"
         style={{ boxShadow: "0 20px 48px rgba(3,60,87,0.28)" }}
       >
+        <h2 id="demo-modal-title" className="sr-only">
+          {title}
+        </h2>
+
         <div className="relative pb-[56.25%]">
-          {/* 16:9 responsive iframe/video */}
           {src ? (
             <iframe
               src={src}
@@ -104,7 +131,6 @@ function DemoModal({
               controlsList="nodownload"
             >
               <source src="/demo-sample.mp4" type="video/mp4" />
-              {/* fallback text */}
               Tu navegador no soporta reproduccion de video.
             </video>
           )}
@@ -122,14 +148,11 @@ function DemoModal({
   );
 }
 
+/* ---------------- Hero ---------------- */
 export default function HeroWithDemo() {
   const [modalOpen, setModalOpen] = useState(false);
-
-  // If you have a specific youtube embed (use the embed URL) set here:
-  // e.g. "https://www.youtube.com/embed/VIDEO_ID?autoplay=1"
   const demoEmbed = undefined;
 
-  // Smooth scroll helper that accounts for fixed header
   function scrollToSection(id: string) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -139,18 +162,13 @@ export default function HeroWithDemo() {
     const rect = el.getBoundingClientRect();
     const absoluteTop = window.scrollY + rect.top;
     const targetY = Math.max(0, Math.floor(absoluteTop - headerHeight - 12));
-    // prefer scrollTo with smooth
     try {
       window.scrollTo({ top: targetY, behavior: "smooth" });
     } catch {
       el.scrollIntoView({ block: "start", behavior: "smooth" });
     }
-    // send small analytics event
     try {
-      void trackEvent?.({
-        name: "hero_cta_scroll",
-        params: { to: id },
-      });
+      void trackEvent?.({ name: "hero_cta_scroll", params: { to: id } });
     } catch {}
   }
 
@@ -161,46 +179,35 @@ export default function HeroWithDemo() {
         params: { cta: "hero_beta", location: "hero" },
       });
     } catch {}
-    // open typeform in new tab handled by anchor
   }
 
-  // Respect reduced motion: don't auto animate heavy things
-  const prefersReduced =
-    typeof window !== "undefined" &&
-    window?.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  useEffect(() => {
+    // small mount debug left commented — can enable if needed
+    // console.debug("[HeroWithDemo] mounted");
+  }, []);
 
   return (
     <>
       <section
         id="hero"
-        className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center"
         aria-labelledby="hero-title"
+        className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center pt-2"
       >
         {/* LEFT: copy */}
         <div>
-          <h2
+          <h1
             id="hero-title"
-            className="text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight"
-            style={{
-              background:
-                "linear-gradient(90deg, var(--turquoise), var(--navy))",
-              WebkitBackgroundClip: "text",
-              backgroundClip: "text",
-              color: "transparent",
-            }}
+            className="text-3xl md:text-4xl lg:text-5xl font-extrabold leading-tight gradient-text"
+            style={{ lineHeight: 1.02 }}
           >
             De 1 episodio a 10 publicaciones — sin perder horas.
-          </h2>
+          </h1>
 
-          <p className="mt-4 text-lg" style={{ color: "var(--text)" }}>
+          <p className="mt-4 text-lg text-[var(--text)]">
             Sube el episodio y <strong>OasiClips</strong> genera clips
             optimizados, captions y thumbnails, y los programa en tus
             plataformas favoritas.{" "}
-            <span
-              className="ml-1 font-medium text-sm"
-              style={{ color: "var(--navy)" }}
-            >
+            <span className="ml-1 font-medium text-sm text-[var(--navy)]">
               3 meses Pro gratis para early-birds.
             </span>
           </p>
@@ -211,12 +218,7 @@ export default function HeroWithDemo() {
               target="_blank"
               rel="noreferrer"
               onClick={onPrimaryCta}
-              className="inline-flex items-center gap-3 px-5 py-3 rounded-md font-medium shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mint)]"
-              style={{
-                backgroundColor: "var(--coral)",
-                color: "var(--white)",
-                boxShadow: "var(--shadow)",
-              }}
+              className="inline-flex items-center gap-3 px-5 py-3 rounded-md font-medium shadow-md focus:outline-none btn-primary"
               aria-label="Accede a la beta (3 meses gratis)"
             >
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/10">
@@ -227,23 +229,15 @@ export default function HeroWithDemo() {
 
             <button
               type="button"
-              className="inline-flex items-center gap-2 text-sm px-4 py-3 rounded-md border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--turquoise)]"
+              className="inline-flex items-center gap-2 text-sm px-4 py-3 rounded-md border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--turquoise)] btn-muted"
               onClick={() => scrollToSection("como-funciona")}
-              style={{
-                borderColor: "rgba(3,60,87,0.06)",
-                color: "var(--navy)",
-                background: "transparent",
-              }}
               aria-label="Ver cómo funciona"
             >
               Ver cómo funciona
             </button>
           </div>
 
-          <ul
-            className="mt-6 space-y-3 text-base"
-            style={{ color: "var(--text)" }}
-          >
+          <ul className="mt-6 space-y-3 text-base text-[var(--text)]">
             <li className="flex items-start gap-3">
               <span
                 className="flex-shrink-0 mt-1 text-[var(--mint)]"
@@ -280,7 +274,7 @@ export default function HeroWithDemo() {
             </li>
           </ul>
 
-          <div className="mt-6 text-sm" style={{ color: "var(--text)" }}>
+          <div className="mt-6 text-sm text-[var(--text)]">
             ¿Prefieres probar sin compromiso? Regístrate y recibirás créditos
             gratis para tus primeros 5 exports.
           </div>
@@ -289,18 +283,10 @@ export default function HeroWithDemo() {
         {/* RIGHT: demo card */}
         <div>
           <div
-            className="bg-white rounded-xl p-6 transform transition-shadow"
-            style={{
-              boxShadow: "var(--shadow)",
-              transition: prefersReduced
-                ? "none"
-                : "transform 220ms ease, box-shadow 220ms ease",
-            }}
+            className="bg-white rounded-xl p-6 card-lift"
+            style={{ boxShadow: "var(--shadow)" }}
           >
-            <div
-              className="text-sm font-medium"
-              style={{ color: "var(--text)" }}
-            >
+            <div className="text-sm font-medium text-[var(--text)]">
               Demo rápido
             </div>
 
@@ -313,7 +299,6 @@ export default function HeroWithDemo() {
                   "linear-gradient(180deg, rgba(3,60,87,0.95) 0%, rgba(0,194,199,0.08) 100%)",
               }}
             >
-              {/* Play button */}
               <button
                 type="button"
                 aria-label="Reproducir demo"
@@ -333,6 +318,8 @@ export default function HeroWithDemo() {
                   backdropFilter: "blur(6px)",
                   color: "var(--white)",
                 }}
+                aria-haspopup="dialog"
+                aria-expanded={modalOpen}
               >
                 <IconPlay className="w-6 h-6 md:w-7 md:h-7" />
               </button>
@@ -345,7 +332,7 @@ export default function HeroWithDemo() {
               </div>
             </div>
 
-            <div className="mt-4 text-sm" style={{ color: "var(--text)" }}>
+            <div className="mt-4 text-sm text-[var(--text)]">
               Sube un episodio, revisa 3 clips sugeridos, edita y programa.
             </div>
 
@@ -362,12 +349,7 @@ export default function HeroWithDemo() {
                     });
                   } catch {}
                 }}
-                className="block w-full text-center px-4 py-2 rounded-md font-semibold"
-                style={{
-                  backgroundColor: "var(--coral)",
-                  color: "var(--white)",
-                  boxShadow: "var(--shadow)",
-                }}
+                className="block w-full text-center px-4 py-2 rounded-md font-semibold btn-primary"
                 aria-label="Quiero la beta"
               >
                 Quiero la beta
@@ -383,75 +365,6 @@ export default function HeroWithDemo() {
         src={demoEmbed}
         title="OasiClips demo"
       />
-
-      {/* Local styling for tiny entrance & micro-interactions */}
-      <style jsx>{`
-        :root {
-          --underline-duration: 260ms;
-          --underline-ease: cubic-bezier(0.22, 1, 0.36, 1);
-        }
-        /* reveal */
-        #hero > div {
-          opacity: 0;
-          transform: translateY(8px);
-          animation: revealUp 520ms var(--underline-ease) forwards;
-        }
-        #hero > div:nth-child(1) {
-          animation-delay: 80ms;
-        }
-        #hero > div:nth-child(2) {
-          animation-delay: 160ms;
-        }
-
-        @keyframes revealUp {
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        /* CTA pulse on first paint (subtle) */
-        a[aria-label="Accede a la beta (3 meses gratis)"] {
-          animation: ctaPulse 1200ms ease-out 1;
-        }
-        @keyframes ctaPulse {
-          0% {
-            transform: scale(0.985);
-          }
-          50% {
-            transform: scale(1.03);
-          }
-          100% {
-            transform: scale(1);
-          }
-        }
-
-        /* ensure the demo card lifts on hover only on pointer fine devices */
-        @media (hover: hover) and (pointer: fine) {
-          .bg-white:hover {
-            transform: translateY(-6px);
-            box-shadow: 0 14px 32px rgba(3, 60, 87, 0.12);
-          }
-        }
-
-        /* accessible focus styles (complement tailwind) */
-        button:focus-visible,
-        a:focus-visible {
-          outline: none;
-          box-shadow: 0 0 0 4px rgba(168, 230, 207, 0.18);
-          border-radius: 8px;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          #hero > div {
-            animation: none !important;
-            transform: none !important;
-          }
-          a[aria-label="Accede a la beta (3 meses gratis)"] {
-            animation: none !important;
-          }
-        }
-      `}</style>
     </>
   );
 }
